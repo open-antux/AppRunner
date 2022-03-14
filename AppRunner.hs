@@ -16,7 +16,9 @@ import System.Environment ( getEnv )
 import System.Directory ( listDirectory )
 import qualified Data.Text as DT
 import Data.List ( sort )
-import Text.Regex.Posix ( (=~) )
+import Data.Maybe ( fromMaybe )
+import Data.List.Split ( splitOn )
+import Text.Regex.Posix ( (=~), getAllTextMatches )
 
 data AppRunner = AppRunner
 
@@ -43,15 +45,35 @@ launchapp str = do
   li       <- io listAppsFiles
   allDatas <- io $ mapM getAllData li
 
-  case DT.unpack (DT.toLower (DT.pack (getKeyFromValue "Terminal" str allDatas))) of
-    "true"    -> runInTerm "" $ checkParameters $ getKeyFromValue "Exec" str allDatas
-    otherwise -> spawn $ checkParameters $ getKeyFromValue "Exec" str allDatas
+  let names = [ getValue "Name" x | x <- allDatas, getValue "NoDisplay" x == "" && getValue "Hidden" x == "" ]
+  let list = getParameters (splitOn " " str) names 
 
-checkParameters :: String -> String
-checkParameters a
-  | not $ null match = DT.unpack $ DT.replace (DT.pack match) (DT.pack "") (DT.pack a)
-  | otherwise          = a
-  where match = (a =~ "%[a-zA-Z]*")::String
+  spawn $ "xmessage " ++ (checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas)
+
+  --case DT.unpack (DT.toLower (DT.pack (getKeyFromValue "Terminal" (head list) allDatas))) of
+    --"true"    -> runInTerm "" $ checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas
+    --otherwise -> spawn $ checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas
+
+getParameters :: [String] -> [String] -> [String]
+getParameters (x:xs) names  
+  | fromMaybe "" (getElem x names) == x = (x:xs)
+  | otherwise = getParameters ((x ++ " " ++ head xs) : tail xs) names
+
+checkParameters :: [String] -> String -> String
+checkParameters param exec = unwords $ map (\x -> checkParameters' x param exec) rawParams
+  where rawParams = getAllTextMatches $ exec =~ "%[a-zA-Z]*" :: [String]
+
+checkParameters' :: String -> [String] -> String -> String
+checkParameters' rawParam param exec = case rawParam of
+  "%f" -> DT.unpack $ DT.replace (DT.pack "%f") (DT.pack $ head param) (DT.pack exec)
+  "%F" -> DT.unpack $ DT.replace (DT.pack "%F") (DT.pack $ unwords param) (DT.pack exec)
+  "%u" -> DT.unpack $ DT.replace (DT.pack "%u") (DT.pack $ head param) (DT.pack exec)
+  "%U" -> DT.unpack $ DT.replace (DT.pack "%U") (DT.pack $ unwords param) (DT.pack exec)
+  otherwise -> DT.unpack $ DT.replace (DT.pack match) (DT.pack "") (DT.pack exec)
+  where match = (exec =~ "%[a-zA-Z]*")::String
+  --"%i" -> putStrLn("sas")
+  --"%c" -> putStrLn("sas")
+  --"%k" -> putStrLn("sas")
 
 -- Get all .desktop file
 listAppsFiles :: IO [String]
@@ -65,13 +87,13 @@ listAppsFiles = do
 
   return [x | x <- (apps'++localapps')::[String], DT.pack ".desktop" `DT.isInfixOf` DT.pack x ]
 
--- Get Name and Exec of .desktop file
-getElem :: String -> [String] -> Maybe String
+getElem :: String -> [String] -> Maybe String 
 getElem s (x:xs)
   | DT.pack s `DT.isInfixOf` DT.pack x = Just x
   | null xs                            = Nothing
   | otherwise                          = getElem s xs
 
+-- Get Name and Exec of .desktop file
 mapTuple :: (a -> b) -> (a, a) -> (b, b)
 mapTuple f a = (f (fst a), f (snd a)) 
 
