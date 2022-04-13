@@ -61,6 +61,8 @@ checkParameters param exec = unwords $ map (\x -> checkParameters' x param exec)
   where rawParams = if length (getAllTextMatches (exec =~ "%[a-zA-Z]*") :: [String]) == 0 then [""] else getAllTextMatches $ exec =~ "%[a-zA-Z]*" :: [String]
 
 checkParameters' :: String -> [String] -> String -> String
+checkParameters' "" [] exec = exec
+checkParameters' rawParam [] exec = DT.unpack $ DT.replace (DT.pack rawParam) (DT.pack "") (DT.pack exec)
 checkParameters' rawParam param exec = case rawParam of
   ""   -> exec
   "%f" -> DT.unpack $ DT.replace (DT.pack "%f") (DT.pack $ head param) (DT.pack exec)
