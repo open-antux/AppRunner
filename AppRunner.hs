@@ -10,7 +10,6 @@ import XMonad.Prompt
       XPrompt(showXPrompt, nextCompletion, completionToCommand),
       searchPredicate )
 import XMonad.Util.Run ( runInTerm )
-import XMonad ( spawn, io, X )
 
 import System.Environment ( getEnv )
 import System.Directory ( listDirectory )
@@ -48,11 +47,9 @@ launchapp str = do
   let names = [ getValue "Name" x | x <- allDatas, getValue "NoDisplay" x == "" && getValue "Hidden" x == "" ]
   let list = getParameters (splitOn " " str) names 
 
-  spawn $ "xmessage " ++ (checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas)
-
-  --case DT.unpack (DT.toLower (DT.pack (getKeyFromValue "Terminal" (head list) allDatas))) of
-    --"true"    -> runInTerm "" $ checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas
-    --otherwise -> spawn $ checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas
+  case DT.unpack (DT.toLower (DT.pack (getKeyFromValue "Terminal" (head list) allDatas))) of
+    "true"    -> runInTerm "" $ checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas
+    otherwise -> spawn $ checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas
 
 getParameters :: [String] -> [String] -> [String]
 getParameters (x:xs) names  
@@ -61,19 +58,16 @@ getParameters (x:xs) names
 
 checkParameters :: [String] -> String -> String
 checkParameters param exec = unwords $ map (\x -> checkParameters' x param exec) rawParams
-  where rawParams = getAllTextMatches $ exec =~ "%[a-zA-Z]*" :: [String]
+  where rawParams = if length (getAllTextMatches (exec =~ "%[a-zA-Z]*") :: [String]) == 0 then [""] else getAllTextMatches $ exec =~ "%[a-zA-Z]*" :: [String]
 
 checkParameters' :: String -> [String] -> String -> String
 checkParameters' rawParam param exec = case rawParam of
+  ""   -> exec
   "%f" -> DT.unpack $ DT.replace (DT.pack "%f") (DT.pack $ head param) (DT.pack exec)
   "%F" -> DT.unpack $ DT.replace (DT.pack "%F") (DT.pack $ unwords param) (DT.pack exec)
   "%u" -> DT.unpack $ DT.replace (DT.pack "%u") (DT.pack $ head param) (DT.pack exec)
   "%U" -> DT.unpack $ DT.replace (DT.pack "%U") (DT.pack $ unwords param) (DT.pack exec)
-  otherwise -> DT.unpack $ DT.replace (DT.pack match) (DT.pack "") (DT.pack exec)
-  where match = (exec =~ "%[a-zA-Z]*")::String
-  --"%i" -> putStrLn("sas")
-  --"%c" -> putStrLn("sas")
-  --"%k" -> putStrLn("sas")
+  otherwise -> DT.unpack $ DT.replace (DT.pack rawParam) (DT.pack "") (DT.pack exec)
 
 -- Get all .desktop file
 listAppsFiles :: IO [String]
