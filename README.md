@@ -7,11 +7,11 @@ something that worked like rofi but more minimalist written in Haskell.
 
 ### Goals
 - [x] Include search predicate.
+- [x] Add support for arguments.
 - [ ] Use `Text` instead of `String`.
 - [ ] Include the paths described in `$XDG_DATA_DIRS`.
 - [ ] Take into consideration all of the desktop entry options (actually it consider 
 `Name`, `NoDisplay`, `Hidden`, `Terminal` and `Exec`).
-- [ ] Add support for arguments.
 
 ## How to configure
 
