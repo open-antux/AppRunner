@@ -11,6 +11,8 @@ import XMonad.Prompt
       searchPredicate )
 import XMonad.Util.Run ( runInTerm )
 
+import Control.Monad ( liftM3 )
+import System.Random ( randomIO )
 import System.Environment ( getEnv )
 import System.Directory ( listDirectory )
 import qualified Data.Text as DT
@@ -18,6 +20,9 @@ import Data.List ( sort )
 import Data.Maybe ( fromMaybe )
 import Data.List.Split ( splitOn )
 import Text.Regex.Posix ( (=~), getAllTextMatches )
+import Network.HTTP.Client ( parseRequest )
+import Network.HTTP.Simple ( httpBS, getResponseBody )
+import qualified Data.ByteString.Char8 as B8
 
 data AppRunner = AppRunner
 
@@ -47,29 +52,46 @@ launchapp str = do
   let names = [ getValue "Name" x | x <- allDatas, getValue "NoDisplay" x == "" && getValue "Hidden" x == "" ]
   let list = getParameters (splitOn " " str) names 
 
+  execFin <- io $ checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas
+
   case DT.unpack (DT.toLower (DT.pack (getKeyFromValue "Terminal" (head list) allDatas))) of
-    "true"    -> runInTerm "" $ checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas
-    otherwise -> spawn $ checkParameters (tail list) $ getKeyFromValue "Exec" (head list) allDatas
+    "true"    -> runInTerm "" $ execFin
+    otherwise -> spawn $ execFin
 
 getParameters :: [String] -> [String] -> [String]
 getParameters (x:xs) names  
   | fromMaybe "" (getElem x names) == x = (x:xs)
   | otherwise = getParameters ((x ++ " " ++ head xs) : tail xs) names
 
-checkParameters :: [String] -> String -> String
-checkParameters param exec = unwords $ map (\x -> checkParameters' x param exec) rawParams
-  where rawParams = if length (getAllTextMatches (exec =~ "%[a-zA-Z]*") :: [String]) == 0 then [""] else getAllTextMatches $ exec =~ "%[a-zA-Z]*" :: [String]
+checkParameters :: [String] -> String -> IO String
+checkParameters param exec = do
+  fmap unwords $ mapM (\x -> checkParameters' x param exec) rawParams 
+  
+  where 
+    rawParams = if length (getAllTextMatches (exec =~ "%[a-zA-Z]*") :: [String]) == 0 then [""] else getAllTextMatches $ exec =~ "%[a-zA-Z]*" :: [String]
+    
+    checkParameters' :: String -> [String] -> String -> IO String
+    checkParameters' "" [] exec = return exec
+    checkParameters' rawParam [] exec = return $ DT.unpack $ DT.replace (DT.pack rawParam) (DT.pack "") (DT.pack exec)
+    checkParameters' rawParam param exec = do 
+      elaboratedParam <- case rawParam of
+        ""   -> return $ exec
+        "%f" -> DT.unpack <$> liftM3 DT.replace (return $ DT.pack "%f") (DT.pack <$> downloadResource (head param)) (return $ DT.pack exec)
+        "%F" -> DT.unpack <$> liftM3 DT.replace (return $ DT.pack "%F") (DT.pack <$> unwords <$> mapM downloadResource param) (return $ DT.pack exec)
+        "%u" -> return $ DT.unpack $ DT.replace (DT.pack "%u") (DT.pack $ head param) (DT.pack exec)
+        "%U" -> return $ DT.unpack $ DT.replace (DT.pack "%U") (DT.pack $ unwords param) (DT.pack exec)
+        otherwise -> return $ DT.unpack $ DT.replace (DT.pack rawParam) (DT.pack "") (DT.pack exec)
+      return elaboratedParam
 
-checkParameters' :: String -> [String] -> String -> String
-checkParameters' "" [] exec = exec
-checkParameters' rawParam [] exec = DT.unpack $ DT.replace (DT.pack rawParam) (DT.pack "") (DT.pack exec)
-checkParameters' rawParam param exec = case rawParam of
-  ""   -> exec
-  "%f" -> DT.unpack $ DT.replace (DT.pack "%f") (DT.pack $ head param) (DT.pack exec)
-  "%F" -> DT.unpack $ DT.replace (DT.pack "%F") (DT.pack $ unwords param) (DT.pack exec)
-  "%u" -> DT.unpack $ DT.replace (DT.pack "%u") (DT.pack $ head param) (DT.pack exec)
-  "%U" -> DT.unpack $ DT.replace (DT.pack "%U") (DT.pack $ unwords param) (DT.pack exec)
-  otherwise -> DT.unpack $ DT.replace (DT.pack rawParam) (DT.pack "") (DT.pack exec)
+downloadResource :: String -> IO String
+downloadResource url = do
+  num <- randomIO :: IO Int
+
+  req <- parseRequest url
+  resp <- httpBS req
+
+  B8.writeFile ("/tmp/apprunner-"++(show $ abs num)) $ getResponseBody resp
+  return $ "/tmp/apprunner-"++(show $ abs num)
 
 -- Get all .desktop file
 listAppsFiles :: IO [String]
