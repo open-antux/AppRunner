@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE LambdaCase #-}
 module AppRunner ( launchAppPrompt ) where
 
 import XMonad ( spawn, io, X )
@@ -14,12 +15,13 @@ import XMonad.Util.Run ( runInTerm )
 import Control.Monad ( liftM3 )
 import System.Random ( randomIO )
 import System.Environment ( getEnv )
-import System.Directory ( listDirectory )
+import System.Directory ( listDirectory, doesFileExist )
 import qualified Data.Text as DT
 import Data.List ( sort )
-import Data.Maybe ( fromMaybe )
+import Data.Maybe ( fromMaybe, fromJust )
 import Data.List.Split ( splitOn )
 import Text.Regex.Posix ( (=~), getAllTextMatches )
+import Network.URI ( parseURI, uriScheme )
 import Network.HTTP.Client ( parseRequest )
 import Network.HTTP.Simple ( httpBS, getResponseBody )
 import qualified Data.ByteString.Char8 as B8
@@ -84,7 +86,18 @@ checkParameters param exec = do
       return elaboratedParam
 
 downloadResource :: String -> IO String
-downloadResource url = do
+downloadResource res  
+  | parseURI res /= Nothing = case (uriScheme $ fromJust $ parseURI res) of
+    "http:"  -> downloadFromHTTP res 
+    "https:" -> downloadFromHTTP res
+    "ftp:"   -> undefined
+    "sftp:"  -> undefined
+  | otherwise = doesFileExist res >>= \case 
+    True -> return res
+    False -> return ""
+  
+downloadFromHTTP :: String -> IO String
+downloadFromHTTP url = do
   num <- randomIO :: IO Int
 
   req <- parseRequest url
