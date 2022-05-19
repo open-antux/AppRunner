@@ -36,8 +36,7 @@ instance XPrompt AppRunner where
 -- Ispired by: https://hackage.haskell.org/package/xmonad-contrib-0.17.0/docs/src/XMonad.Prompt.Shell.html#getShellCompl%27
 launchAppPrompt :: XPConfig -> X()
 launchAppPrompt c = do
-  li       <- io listAppsFiles
-  allDatas <- io $ mapM getAllData li
+  allDatas <- io $ mapM getAllData =<< listAppsFiles
 
   let names = [ getValue "Name" x | x <- allDatas, getValue "NoDisplay" x == "" && getValue "Hidden" x == "" ]
 
@@ -48,8 +47,7 @@ mkComplFunFromList'' names p selected = return $ filter (p selected) names
 
 launchapp :: String -> X()
 launchapp str = do
-  li       <- io listAppsFiles
-  allDatas <- io $ mapM getAllData li
+  allDatas <- io $ mapM getAllData =<< listAppsFiles
 
   let names = [ getValue "Name" x | x <- allDatas, getValue "NoDisplay" x == "" && getValue "Hidden" x == "" ]
   let list = getParameters (splitOn " " str) names 
@@ -76,14 +74,13 @@ checkParameters param exec = do
     checkParameters' "" [] exec = return exec
     checkParameters' rawParam [] exec = return $ DT.unpack $ DT.replace (DT.pack rawParam) (DT.pack "") (DT.pack exec)
     checkParameters' rawParam param exec = do 
-      elaboratedParam <- case rawParam of
+      return =<< case rawParam of
         ""   -> return $ exec
         "%f" -> DT.unpack <$> liftM3 DT.replace (return $ DT.pack "%f") (DT.pack <$> downloadResource (head param)) (return $ DT.pack exec)
         "%F" -> DT.unpack <$> liftM3 DT.replace (return $ DT.pack "%F") (DT.pack <$> unwords <$> mapM downloadResource param) (return $ DT.pack exec)
         "%u" -> return $ DT.unpack $ DT.replace (DT.pack "%u") (DT.pack $ head param) (DT.pack exec)
         "%U" -> return $ DT.unpack $ DT.replace (DT.pack "%U") (DT.pack $ unwords param) (DT.pack exec)
         otherwise -> return $ DT.unpack $ DT.replace (DT.pack rawParam) (DT.pack "") (DT.pack exec)
-      return elaboratedParam
 
 downloadResource :: String -> IO String
 downloadResource res  
@@ -131,7 +128,7 @@ mapTuple f a = (f (fst a), f (snd a))
 adjustStr :: DT.Text -> String
 adjustStr a
   | DT.head a == '=' = DT.unpack $ DT.tail a
-  | otherwise     = DT.unpack a
+  | otherwise        = DT.unpack a
 
 getAllData :: String -> IO [(String, String)]
 getAllData filePath = do
