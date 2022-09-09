@@ -10,7 +10,7 @@ something that worked like rofi but more minimalist written in Haskell.
 - [x] Add support for arguments.
   - [ ] Add support for `ftp` and `sftp` protocol
 - [ ] Use `Text` instead of `String`.
-- [ ] Include the paths described in `$XDG_DATA_DIRS`.
+- [x] Include the paths described in `$XDG_DATA_DIRS`.
 - [ ] Take into consideration all of the desktop entry options (actually it consider 
 `Name`, `NoDisplay`, `Hidden`, `Terminal` and `Exec`).
 
