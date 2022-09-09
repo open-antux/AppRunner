@@ -2,29 +2,30 @@
 {-# LANGUAGE LambdaCase #-}
 module AppRunner ( launchAppPrompt ) where
 
-import XMonad ( spawn, io, X )
+import XMonad (X, io, spawn)
 import XMonad.Prompt
-    ( mkXPrompt,
-      getNextCompletion,
-      getNextOfLastWord,
-      XPConfig,
-      XPrompt(showXPrompt, nextCompletion, completionToCommand),
-      searchPredicate )
-import XMonad.Util.Run ( runInTerm )
+  ( XPConfig
+  , XPrompt(completionToCommand, nextCompletion, showXPrompt)
+  , getNextCompletion
+  , getNextOfLastWord
+  , mkXPrompt
+  , searchPredicate
+  )
+import XMonad.Util.Run (runInTerm)
 
-import Control.Monad ( liftM3 )
-import System.Random ( randomIO )
-import System.Environment ( getEnv )
-import System.Directory ( listDirectory, doesFileExist )
-import qualified Data.Text as DT
-import Data.List ( sort )
-import Data.Maybe ( fromMaybe, fromJust )
-import Data.List.Split ( splitOn )
-import Text.Regex.Posix ( (=~), getAllTextMatches )
-import Network.URI ( parseURI, uriScheme )
-import Network.HTTP.Client ( parseRequest )
-import Network.HTTP.Simple ( httpBS, getResponseBody )
+import Control.Monad (filterM, liftM3)
 import qualified Data.ByteString.Char8 as B8
+import Data.List (sort)
+import Data.List.Split (splitOn)
+import Data.Maybe (fromJust, fromMaybe)
+import qualified Data.Text as DT
+import Network.HTTP.Client (parseRequest)
+import Network.HTTP.Simple (getResponseBody, httpBS)
+import Network.URI (parseURI, uriScheme)
+import System.Directory (doesDirectoryExist, doesFileExist, listDirectory)
+import System.Environment (getEnv)
+import System.Random (randomIO)
+import Text.Regex.Posix ((=~), getAllTextMatches)
 
 data AppRunner = AppRunner
 
@@ -107,13 +108,10 @@ downloadFromHTTP url = do
 listAppsFiles :: IO [String]
 listAppsFiles = do
   username  <- getEnv "USER"
-  apps      <- listDirectory "/usr/share/applications"
-  localapps <- listDirectory $ "/home/"++username++"/.local/share/applications"
+  apps      <- mapM (\x -> map (\y -> x <> y) <$> listDirectory x) =<< filterM doesDirectoryExist =<< map (<> "/applications/") . splitOn ":" <$> getEnv "XDG_DATA_DIRS"
+  localapps <- (\x -> map (\y -> x <> y) <$> listDirectory x) =<< head <$> filterM doesDirectoryExist ["/home/"++username++"/.local/share/applications/"]
 
-  let apps' = map ("/usr/share/applications/" ++) apps
-  let localapps' = map (("/home/"++username++"/.local/share/applications/") ++) localapps
-
-  return [x | x <- (apps'++localapps')::[String], DT.pack ".desktop" `DT.isInfixOf` DT.pack x ]
+  return [x | x <- ((concat apps)++localapps)::[String], DT.pack ".desktop" `DT.isInfixOf` DT.pack x ]
 
 getElem :: String -> [String] -> Maybe String 
 getElem s (x:xs)
